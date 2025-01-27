@@ -1,0 +1,23 @@
+[package]
+name = "svbony"
+version = "0.1.0"
+edition = "2021"
+description = "SVBony Camera Interface"
+readme = "README.md"
+licence = "MIT"
+license-file = "LICENSE"
+
+
+# See more keys and their definitions at 
+# https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "svbony"
+
+
+[profile.test]
+opt-level = 3
+
+[dependencies]
+libc = "0.2.101"
+thiserror = "1.0.30"
+chrono = "0.4.38"
