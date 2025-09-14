@@ -76,6 +76,7 @@ pub enum SVBFlipStatus {
     SVBFlipBoth = 3,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SVBCameraMode {
     SVBCameraModeNormal = 0,
@@ -106,117 +107,6 @@ impl From<i32> for SVBCameraMode {
 pub enum SVBTrigOuput {
     SVBTrigOutputPinA = 0,
     SVBTrigOutputPinB = 1,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
-#[repr(i32)]
-pub enum SVBErrorCode {
-    SVBSuccess = 0,
-    SVBErrorInvalidIndex = 1,
-    SVBErrorInvalidId = 2,
-    SVBErrorInvalidControlType = 3,
-    SVBErrorCameraClosed = 4,
-    SVBErrorCameraRemoved = 5,
-    SVBErrorInvalidPath = 6,
-    SVBErrorInvalidFileFormat = 7,
-    SVBErrorInvalidSize = 8,
-    SVBErrorInvalidImageType = 9,
-    SVBErrrorOutOfBoundary = 10,
-    SVBErrorTimeout = 11,
-    SVBErrorInvalidSequence = 12,
-    SVBErrorBufferToosmall = 13,
-    SVBErrorVideoModeActive = 14,
-    SVBErrorExposureInProgress = 15,
-    SVBErrorGeneralError = 16,
-    SVBErrorInvalidMode = 17,
-    SVBErrorInvalidDirection = 18,
-    SVBErrorUnknownSensorType = 19,
-}
-
-impl From<i32> for SVBErrorCode {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => SVBErrorCode::SVBSuccess,
-            1 => SVBErrorCode::SVBErrorInvalidIndex,
-            2 => SVBErrorCode::SVBErrorInvalidId,
-            3 => SVBErrorCode::SVBErrorInvalidControlType,
-            4 => SVBErrorCode::SVBErrorCameraClosed,
-            5 => SVBErrorCode::SVBErrorCameraRemoved,
-            6 => SVBErrorCode::SVBErrorInvalidPath,
-            7 => SVBErrorCode::SVBErrorInvalidFileFormat,
-            8 => SVBErrorCode::SVBErrorInvalidSize,
-            9 => SVBErrorCode::SVBErrorInvalidImageType,
-            10 => SVBErrorCode::SVBErrrorOutOfBoundary,
-            11 => SVBErrorCode::SVBErrorTimeout,
-            12 => SVBErrorCode::SVBErrorInvalidSequence,
-            13 => SVBErrorCode::SVBErrorBufferToosmall,
-            14 => SVBErrorCode::SVBErrorVideoModeActive,
-            15 => SVBErrorCode::SVBErrorExposureInProgress,
-            16 => SVBErrorCode::SVBErrorGeneralError,
-            17 => SVBErrorCode::SVBErrorInvalidMode,
-            18 => SVBErrorCode::SVBErrorInvalidDirection,
-            19 => SVBErrorCode::SVBErrorUnknownSensorType,
-            _ => panic!("Unknown error code: {}", value),
-        }
-    }
-}
-
-impl std::error::Error for SVBErrorCode {
-    fn description(&self) -> &str {
-        match self {
-            SVBErrorCode::SVBSuccess => "Success",
-            SVBErrorCode::SVBErrorInvalidIndex => "Invalid index",
-            SVBErrorCode::SVBErrorInvalidId => "Invalid ID",
-            SVBErrorCode::SVBErrorInvalidControlType => "Invalid control type",
-            SVBErrorCode::SVBErrorCameraClosed => "Camera closed",
-            SVBErrorCode::SVBErrorCameraRemoved => "Camera removed",
-            SVBErrorCode::SVBErrorInvalidPath => "Invalid path",
-            SVBErrorCode::SVBErrorInvalidFileFormat => "Invalid file format",
-            SVBErrorCode::SVBErrorInvalidSize => "Invalid size",
-            SVBErrorCode::SVBErrorInvalidImageType => "Invalid image type",
-            SVBErrorCode::SVBErrrorOutOfBoundary => "Out of boundary",
-            SVBErrorCode::SVBErrorTimeout => "Timeout",
-            SVBErrorCode::SVBErrorInvalidSequence => "Invalid sequence",
-            SVBErrorCode::SVBErrorBufferToosmall => "Buffer too small",
-            SVBErrorCode::SVBErrorVideoModeActive => "Video mode active",
-            SVBErrorCode::SVBErrorExposureInProgress => "Exposure in progress",
-            SVBErrorCode::SVBErrorGeneralError => "General error",
-            SVBErrorCode::SVBErrorInvalidMode => "Invalid mode",
-            SVBErrorCode::SVBErrorInvalidDirection => "Invalid direction",
-            SVBErrorCode::SVBErrorUnknownSensorType => "Unknown sensor type",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        None
-    }
-}
-
-impl std::fmt::Display for SVBErrorCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SVBErrorCode::SVBSuccess => write!(f, "Success"),
-            SVBErrorCode::SVBErrorInvalidIndex => write!(f, "Invalid index"),
-            SVBErrorCode::SVBErrorInvalidId => write!(f, "Invalid ID"),
-            SVBErrorCode::SVBErrorInvalidControlType => write!(f, "Invalid control type"),
-            SVBErrorCode::SVBErrorCameraClosed => write!(f, "Camera closed"),
-            SVBErrorCode::SVBErrorCameraRemoved => write!(f, "Camera removed"),
-            SVBErrorCode::SVBErrorInvalidPath => write!(f, "Invalid path"),
-            SVBErrorCode::SVBErrorInvalidFileFormat => write!(f, "Invalid file format"),
-            SVBErrorCode::SVBErrorInvalidSize => write!(f, "Invalid size"),
-            SVBErrorCode::SVBErrorInvalidImageType => write!(f, "Invalid image type"),
-            SVBErrorCode::SVBErrrorOutOfBoundary => write!(f, "Out of boundary"),
-            SVBErrorCode::SVBErrorTimeout => write!(f, "Timeout"),
-            SVBErrorCode::SVBErrorInvalidSequence => write!(f, "Invalid sequence"),
-            SVBErrorCode::SVBErrorBufferToosmall => write!(f, "Buffer too small"),
-            SVBErrorCode::SVBErrorVideoModeActive => write!(f, "Video mode active"),
-            SVBErrorCode::SVBErrorExposureInProgress => write!(f, "Exposure in progress"),
-            SVBErrorCode::SVBErrorGeneralError => write!(f, "General error"),
-            SVBErrorCode::SVBErrorInvalidMode => write!(f, "Invalid mode"),
-            SVBErrorCode::SVBErrorInvalidDirection => write!(f, "Invalid direction"),
-            SVBErrorCode::SVBErrorUnknownSensorType => write!(f, "Unknown sensor type"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

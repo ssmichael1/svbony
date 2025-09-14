@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 description = "SVBony Camera Interface"
 readme = "README.md"
-licence = "MIT"
 license-file = "LICENSE"
 
 
@@ -19,5 +18,7 @@ opt-level = 3
 
 [dependencies]
 libc = "0.2.101"
-thiserror = "1.0.30"
+thiserror = "2.0.16"
 chrono = "0.4.38"
+camera = { path = "../camera" }
+numeris = { path = "../numeris" }

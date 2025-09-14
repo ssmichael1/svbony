@@ -1,5 +1,6 @@
 use super::structs::*;
 use super::types::*;
+use super::SVBError;
 use std::ffi::{c_char, c_float, c_int, c_long, c_uchar, c_uint};
 
 //#[link(name = "SVBCameraSDK")]
@@ -69,13 +70,9 @@ extern "C" {
     fn SVBGetSDKVersion() -> *const c_char;
 }
 
-pub fn restore_default_parameters(id: &i32) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBRestoreDefaultParam(*id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn restore_default_parameters(id: &i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBRestoreDefaultParam(*id) }.into();
+    result.into()
 }
 
 pub fn get_sdk_version() -> String {
@@ -84,69 +81,51 @@ pub fn get_sdk_version() -> String {
     version.to_string_lossy().to_string()
 }
 
-pub fn set_auto_save(id: &i32, save: bool) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBSetAutoSaveParam(*id, if save { 1 } else { 0 }) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn set_auto_save(id: &i32, save: bool) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBSetAutoSaveParam(*id, if save { 1 } else { 0 }) }.into();
+    result.into()
 }
 
-pub fn open_camera(id: i32) -> Result<(), SVBErrorCode> {
-    let result: SVBErrorCode = unsafe { SVBOpenCamera(id) }.into();
-    println!("open_camera: {:?}", result);
-
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn open_camera(id: i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBOpenCamera(id) }.into();
+    result.into()
 }
 
-pub fn close_camera(id: &i32) -> Result<(), SVBErrorCode> {
-    let result: SVBErrorCode = unsafe { SVBCloseCamera(*id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn close_camera(id: &i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBCloseCamera(*id) }.into();
+    result.into()
 }
 
 pub fn get_number_of_connected_camera() -> usize {
     unsafe { SVBGetNumOfConnectedCameras() as usize }
 }
 
-pub fn get_number_of_controls(id: &i32) -> Result<usize, SVBErrorCode> {
+pub fn get_number_of_controls(id: &i32) -> Result<usize, SVBError> {
     let mut num: i32 = 0;
     let result = unsafe { SVBGetNumOfControls(*id, &mut num) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(num as usize)
     } else {
         Err(result)
     }
 }
 
-pub fn get_output_image_type(id: i32) -> Result<SVBImageType, SVBErrorCode> {
+pub fn get_output_image_type(id: i32) -> Result<SVBImageType, SVBError> {
     let mut image_type = 0;
     let result = unsafe { SVBGetOutputImageType(id, &mut image_type) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(image_type.into())
     } else {
         Err(result)
     }
 }
 
-pub fn set_output_image_type(id: i32, image_type: SVBImageType) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVGSetOutputImageType(id, image_type as i32) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn set_output_image_type(id: i32, image_type: SVBImageType) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVGSetOutputImageType(id, image_type as i32) }.into();
+    result.into()
 }
 
-pub fn get_control_info(id: &i32, control_id: usize) -> Result<SVBControlCaps, SVBErrorCode> {
+pub fn get_control_info(id: &i32, control_id: usize) -> Result<SVBControlCaps, SVBError> {
     let mut caps = LLSVBControlCaps {
         name: [0; 64],
         description: [0; 128],
@@ -158,52 +137,50 @@ pub fn get_control_info(id: &i32, control_id: usize) -> Result<SVBControlCaps, S
         control_type: 0,
         unused: [0; 32],
     };
-    let result: SVBErrorCode =
-        unsafe { SVBGetControlCaps(*id, control_id as i32, &mut caps) }.into();
+    let result = unsafe { SVBGetControlCaps(*id, control_id as i32, &mut caps) }.into();
 
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(caps.into())
     } else {
         Err(result)
     }
 }
 
-pub fn get_control_value(id: &i32, ctrl: SVBControlType) -> Result<(i32, bool), SVBErrorCode> {
+pub fn get_control_value(id: &i32, ctrl: SVBControlType) -> Result<(i32, bool), SVBError> {
     let mut value = 0 as c_long;
     let mut auto = 0;
-    let result: SVBErrorCode =
-        unsafe { SVBGetControlValue(*id, ctrl as i32, &mut value, &mut auto) }.into();
+    let result = unsafe { SVBGetControlValue(*id, ctrl as i32, &mut value, &mut auto) }.into();
 
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok((value as i32, auto != 0))
     } else {
         Err(result)
     }
 }
 
-pub fn get_camera_mode(id: &i32) -> Result<SVBCameraMode, SVBErrorCode> {
+pub fn get_camera_mode(id: &i32) -> Result<SVBCameraMode, SVBError> {
     let mut mode = 0;
     let result = unsafe { SVBGetCameraMode(*id, &mut mode) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(mode.into())
     } else {
         Err(result)
     }
 }
 
-pub fn set_camera_mode(id: &i32, mode: SVBCameraMode) -> Result<(), SVBErrorCode> {
+pub fn set_camera_mode(id: &i32, mode: SVBCameraMode) -> Result<(), SVBError> {
     let result = unsafe { SVGSetCameraMode(*id, mode as i32) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(())
     } else {
         Err(result)
     }
 }
 
-pub fn get_pixel_size_microns(id: &i32) -> Result<f32, SVBErrorCode> {
+pub fn get_pixel_size_microns(id: &i32) -> Result<f32, SVBError> {
     let mut pixel_size = 0.0 as c_float;
     let result = unsafe { SVBGetSensorPixelSize(*id, &mut pixel_size) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(pixel_size as f32)
     } else {
         Err(result)
@@ -215,8 +192,8 @@ pub fn set_control_value(
     ctrl: SVBControlType,
     value: i32,
     auto: bool,
-) -> Result<(), SVBErrorCode> {
-    let result: SVBErrorCode = unsafe {
+) -> Result<(), SVBError> {
+    let result: SVBError = unsafe {
         SVBSetControlValue(
             *id,
             ctrl as c_uint,
@@ -225,15 +202,10 @@ pub fn set_control_value(
         )
     }
     .into();
-
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+    result.into()
 }
 
-pub fn get_camera_property(id: &i32) -> Result<SVBCameraProperty, SVBErrorCode> {
+pub fn get_camera_property(id: &i32) -> Result<SVBCameraProperty, SVBError> {
     let mut property = LLSVBCameraProperty {
         max_height: 0,
         max_width: 0,
@@ -244,30 +216,30 @@ pub fn get_camera_property(id: &i32) -> Result<SVBCameraProperty, SVBErrorCode> 
         max_bit_depth: 0,
         is_triggerable: 0,
     };
-    let result: SVBErrorCode = unsafe { SVBGetCameraProperty(*id as c_int, &mut property) }.into();
+    let result: SVBError = unsafe { SVBGetCameraProperty(*id as c_int, &mut property) }.into();
 
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(property.into())
     } else {
         Err(result)
     }
 }
 
-pub fn get_camera_property_ex(id: i32) -> Result<SVBCameraPropertyEx, SVBErrorCode> {
+pub fn get_camera_property_ex(id: i32) -> Result<SVBCameraPropertyEx, SVBError> {
     let mut property = LLSVBCameraPropertyEx {
         support_control_temp: 0,
         unused: [0; 64],
     };
-    let result: SVBErrorCode = unsafe { SVBGetCameraPropertyEx(id as c_int, &mut property) }.into();
+    let result: SVBError = unsafe { SVBGetCameraPropertyEx(id as c_int, &mut property) }.into();
 
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(property.into())
     } else {
         Err(result)
     }
 }
 
-pub fn get_camera_info(id: usize) -> Result<SVBCameraInfo, SVBErrorCode> {
+pub fn get_camera_info(id: usize) -> Result<SVBCameraInfo, SVBError> {
     let mut info = LLSVBCameraInfo {
         friendly_name: [0; 32],
         serial_number: [0; 32],
@@ -275,9 +247,9 @@ pub fn get_camera_info(id: usize) -> Result<SVBCameraInfo, SVBErrorCode> {
         device_id: 0,
         camera_id: 0,
     };
-    let result: SVBErrorCode = unsafe { SVBGetCameraInfo(&mut info, id as c_int) }.into();
+    let result: SVBError = unsafe { SVBGetCameraInfo(&mut info, id as c_int) }.into();
 
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(info.into())
     } else {
         Err(result)
@@ -291,13 +263,10 @@ pub fn set_roi_format(
     width: i32,
     height: i32,
     bin: i32,
-) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBSetROIFormat(id, startx, starty, width, height, bin) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+) -> Result<(), SVBError> {
+    let result: SVBError =
+        unsafe { SVBSetROIFormat(id, startx, starty, width, height, bin) }.into();
+    result.into()
 }
 
 pub fn set_roi_format_ex(
@@ -308,16 +277,13 @@ pub fn set_roi_format_ex(
     height: i32,
     bin: i32,
     mode: i32,
-) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBSetROIFormatEx(id, startx, starty, width, height, bin, mode) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+) -> Result<(), SVBError> {
+    let result: SVBError =
+        unsafe { SVBSetROIFormatEx(id, startx, starty, width, height, bin, mode) }.into();
+    result.into()
 }
 
-pub fn get_roi_format(id: i32) -> Result<(i32, i32, i32, i32, i32), SVBErrorCode> {
+pub fn get_roi_format(id: i32) -> Result<(i32, i32, i32, i32, i32), SVBError> {
     let mut startx = 0;
     let mut starty = 0;
     let mut width = 0;
@@ -334,14 +300,14 @@ pub fn get_roi_format(id: i32) -> Result<(i32, i32, i32, i32, i32), SVBErrorCode
         )
     }
     .into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok((startx, starty, width, height, bin))
     } else {
         Err(result)
     }
 }
 
-pub fn get_roi_format_ex(id: i32) -> Result<(i32, i32, i32, i32, i32, i32), SVBErrorCode> {
+pub fn get_roi_format_ex(id: i32) -> Result<(i32, i32, i32, i32, i32, i32), SVBError> {
     let mut startx = 0;
     let mut starty = 0;
     let mut width = 0;
@@ -360,39 +326,31 @@ pub fn get_roi_format_ex(id: i32) -> Result<(i32, i32, i32, i32, i32, i32), SVBE
         )
     }
     .into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok((startx, starty, width, height, bin, mode))
     } else {
         Err(result)
     }
 }
 
-pub fn get_dropped_frames(id: &i32) -> Result<i32, SVBErrorCode> {
+pub fn get_dropped_frames(id: &i32) -> Result<i32, SVBError> {
     let mut dropped_frames = 0;
     let result = unsafe { SVBGetDroppedFrames(*id, &mut dropped_frames) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(dropped_frames)
     } else {
         Err(result)
     }
 }
 
-pub fn start_capture(id: &i32) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBStartVideoCapture(*id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn start_capture(id: &i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBStartVideoCapture(*id) }.into();
+    result.into()
 }
 
-pub fn stop_capture(id: &i32) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBStopVideoCapture(*id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn stop_capture(id: &i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBStopVideoCapture(*id) }.into();
+    result.into()
 }
 
 pub trait PixelType {}
@@ -404,36 +362,28 @@ pub fn get_video_data<T>(
     id: &i32,
     buf: &mut [T],
     waitms: i32,
-) -> Result<chrono::DateTime<chrono::Utc>, SVBErrorCode>
+) -> Result<chrono::DateTime<chrono::Utc>, SVBError>
 where
     T: PixelType + Sized,
 {
     let size = std::mem::size_of_val(buf) as c_long;
     let result =
         unsafe { SVBGetVideoData(*id, buf.as_mut_ptr() as *mut c_uchar, size, waitms) }.into();
-    if result == SVBErrorCode::SVBSuccess {
+    if result == SVBError::Success {
         Ok(chrono::Utc::now())
     } else {
         Err(result)
     }
 }
 
-pub fn white_balance_once(id: i32) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBWhiteBalanceOnce(id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn white_balance_once(id: i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBWhiteBalanceOnce(id) }.into();
+    result.into()
 }
 
-pub fn send_soft_trigger(id: i32) -> Result<(), SVBErrorCode> {
-    let result = unsafe { SVBSendSoftTrigger(id) }.into();
-    if result == SVBErrorCode::SVBSuccess {
-        Ok(())
-    } else {
-        Err(result)
-    }
+pub fn send_soft_trigger(id: i32) -> Result<(), SVBError> {
+    let result: SVBError = unsafe { SVBSendSoftTrigger(id) }.into();
+    result.into()
 }
 
 #[cfg(test)]

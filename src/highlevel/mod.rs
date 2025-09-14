@@ -1,21 +1,20 @@
 use crate::lowlevel as ll;
 
+use camera::{Camera, CameraError, CameraFrame, FrameCallback};
+use numeris::image::Image;
+
 pub use ll::SVBCameraInfo;
 pub use ll::{PixelType, SVBControlCaps, SVBControlType};
-pub use ll::{SVBBayerPattern, SVBCameraProperty, SVBErrorCode, SVBImageType};
+pub use ll::{SVBBayerPattern, SVBCameraProperty, SVBError, SVBImageType};
 
 use std::sync::{Arc, Mutex};
+
+type SVBResult<T> = Result<T, SVBError>;
 
 pub enum FrameData<'a> {
     U8Frame(&'a [u8]),
     U16Frame(&'a [u16]),
 }
-
-pub trait CameraCallback: Send + Sync {
-    fn on_video_frame(&mut self, data: &FrameData, timestamp: chrono::DateTime<chrono::Utc>);
-}
-
-pub type CameraCallbackFunction = dyn Fn(&FrameData, chrono::DateTime<chrono::Utc>) + Send + Sync;
 
 #[derive(Clone)]
 pub struct SVBonyCamera {
@@ -24,12 +23,10 @@ pub struct SVBonyCamera {
     property: SVBCameraProperty,
     pixel_pitch: f64,
     capabilities: Vec<SVBControlCaps>,
-    callbacks: Vec<Arc<Mutex<dyn CameraCallback>>>,
-    function_callbacks: Vec<Arc<CameraCallbackFunction>>,
     running: Arc<Mutex<bool>>,
+    callback: Arc<Mutex<Option<Box<FrameCallback>>>>,
+    exposure: Arc<Mutex<f64>>,
 }
-
-type SVBResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 /// Get a list of SVBony cameras connected to the host system
 ///
@@ -37,12 +34,91 @@ type SVBResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 ///   A vector of SVBCameraInfo struct describing the connected cameras
 pub fn get_connected_cameras() -> SVBResult<Vec<SVBCameraInfo>> {
     let ncam = ll::get_number_of_connected_camera();
-    (0..ncam)
-        .map(|i| match ll::get_camera_info(i) {
-            Ok(info) => Ok(info),
-            Err(e) => Err(e.into()),
+    (0..ncam).map(ll::get_camera_info).collect()
+}
+
+impl Camera for SVBonyCamera {
+    fn name(&self) -> String {
+        self.info.friendly_name.clone()
+    }
+
+    fn connect(&mut self) -> Result<(), CameraError> {
+        ll::open_camera(self.id).map_err(|e| match e {
+            SVBError::InvalidId => CameraError::Connection,
+            _ => CameraError::Other(format!("Failed to open camera: {}", e)),
         })
-        .collect()
+    }
+
+    fn disconnect(&mut self) -> Result<(), CameraError> {
+        ll::close_camera(&self.id).map_err(|e| match e {
+            SVBError::InvalidId => CameraError::Connection,
+            _ => CameraError::Other(format!("Failed to close camera: {}", e)),
+        })
+    }
+
+    /// Set exposure time in seconds
+    fn set_exposure(&mut self, exposure: f64) -> Result<(), CameraError> {
+        let exposure_us = (exposure * 1_000_000.0) as i32;
+        self.set_control_value(SVBControlType::SVBExposure, exposure_us)
+            .map_err(|e| CameraError::Other(format!("Failed to set exposure: {}", e)))?;
+        // Now get the exposure
+        let exp = self
+            .get_control_value(SVBControlType::SVBExposure)
+            .map_err(|e| CameraError::Other(format!("Failed to get exposure: {}", e)))?;
+        *self.exposure.lock().unwrap() = exp as f64 / 1_000_000.0;
+        Ok(())
+    }
+
+    fn get_exposure(&self) -> Result<f64, CameraError> {
+        Ok(*self.exposure.lock().unwrap())
+    }
+
+    fn get_exposure_limits(&self) -> Result<(f64, f64), CameraError> {
+        if let Some(cap) = self.get_control_info(SVBControlType::SVBExposure) {
+            Ok((
+                cap.min_value as f64 / 1_000_000.0,
+                cap.max_value as f64 / 1_000_000.0,
+            ))
+        } else {
+            Err(CameraError::NotSupported)
+        }
+    }
+
+    fn set_gain(&mut self, gain: f64) -> Result<(), CameraError> {
+        let gain_val = gain as i32;
+        self.set_control_value(SVBControlType::SVBGain, gain_val)
+            .map_err(|e| CameraError::Other(format!("Failed to set gain: {}", e)))
+    }
+
+    fn get_gain(&self) -> Result<f64, CameraError> {
+        self.get_control_value(SVBControlType::SVBGain)
+            .map(|v| v as f64)
+            .map_err(|e| CameraError::Other(format!("Failed to get gain: {}", e)))
+    }
+
+    fn set_frame_callback<F>(&mut self, cb: F) -> Result<(), CameraError>
+    where
+        F: Fn(&CameraFrame) -> Result<(), CameraError> + Send + Sync + 'static,
+    {
+        *self.callback.lock().unwrap() = Some(Box::new(cb));
+        Ok(())
+    }
+
+    fn start(&mut self) -> Result<(), CameraError> {
+        let mut cam = self.clone();
+        std::thread::spawn(move || {
+            cam.run().unwrap();
+        });
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<(), CameraError> {
+        SVBonyCamera::stop(self).map_err(|e| match e {
+            SVBError::InvalidId => CameraError::Connection,
+            _ => CameraError::Other(format!("Failed to stop camera: {}", e)),
+        })?;
+        Ok(())
+    }
 }
 
 impl SVBonyCamera {
@@ -67,17 +143,17 @@ impl SVBonyCamera {
             pixel_pitch: ll::get_pixel_size_microns(&id)? as f64,
             capabilities: {
                 (0..ll::get_number_of_controls(&id)?)
-                    .map(|i| -> SVBResult<SVBControlCaps> {
-                        match ll::get_control_info(&id, i) {
-                            Ok(info) => Ok(info),
-                            Err(e) => Err(e.into()),
-                        }
-                    })
+                    .map(|i| -> SVBResult<SVBControlCaps> { ll::get_control_info(&id, i) })
                     .collect::<SVBResult<Vec<SVBControlCaps>>>()?
             },
-            callbacks: Vec::new(),
-            function_callbacks: Vec::new(),
             running: Arc::new(Mutex::new(false)),
+            callback: Arc::new(Mutex::new(None)),
+            exposure: Arc::new(Mutex::new({
+                ll::get_control_value(&id, SVBControlType::SVBExposure)
+                    .map(|v| v.0)
+                    .unwrap_or(0) as f64
+                    / 1_000_000.0
+            })),
         })
     }
 
@@ -86,67 +162,49 @@ impl SVBonyCamera {
         let mut buffers: Vec<Vec<u16>> = (0..nbuffers)
             .map(|_| vec![0u16; (self.max_width() * self.max_height()) as usize])
             .collect();
-        let mut bufcounter = 0;
-
-        // Recommended timeout from vendor is 2x exposure time + 500ms
-        // and exposure is queried in microseconds
-        let wait_ms = self.exposure()? * 2 / 1000 + 500;
+        let bufcounter: usize = 0;
 
         self.start_video_capture().unwrap();
         *self.running.lock().unwrap() = true;
 
         while *self.running.lock().unwrap() {
-            let ts = match self.get_frame(&mut buffers[bufcounter], wait_ms) {
+            let exposure = *self.exposure.lock().unwrap();
+            let wait_ms = (exposure * 1_000_000.0) * 2.0 / 1000.0 + 500.0;
+
+            // Recommended timeout from vendor is 2x exposure time + 500ms
+            let ts = match self.get_frame(&mut buffers[bufcounter], wait_ms as i32) {
                 Ok(ts) => ts,
                 Err(e) => {
-                    if e == SVBErrorCode::SVBErrorTimeout && !(*self.running.lock().unwrap()) {
+                    if e == SVBError::Timeout && !(*self.running.lock().unwrap()) {
                         break;
                     } else {
-                        return Err(e.into());
+                        return Err(e);
                     }
                 }
             };
-            for cb in self.callbacks.iter_mut() {
-                cb.lock()
+            if let Some(ref cb) = *self.callback.lock().unwrap() {
+                cb(&CameraFrame {
+                    exposure,
+                    center_of_integration: ts,
+                    bit_depth: None,
+                    frame: Image::<u16>::from_data(
+                        self.max_width() as usize,
+                        self.max_height() as usize,
+                        buffers[bufcounter].clone(),
+                    )
                     .unwrap()
-                    .on_video_frame(&FrameData::U16Frame(&buffers[bufcounter]), ts);
-            }
-            for cb in self.function_callbacks.iter() {
-                cb(&FrameData::U16Frame(&buffers[bufcounter]), ts);
+                    .into(),
+                })
+                .unwrap();
             }
         }
         Ok(())
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> SVBResult<()> {
         println!("setting running to false");
         *self.running.lock().unwrap() = false;
         self.stop_video_capture().unwrap();
-    }
-
-    /// Add a callback to the camera
-    /// # Arguments
-    /// * `callback` - The callback object
-    ///
-    /// # Notes
-    ///    The callback object must implement the CameraCallback trait
-    ///
-    /// # Returns
-    ///   Empty result if successful
-    ///  Error if the callback cannot be added
-    pub fn add_callback<F>(&mut self, callback: F) -> SVBResult<()>
-    where
-        F: CameraCallback + Send + Sync + 'static,
-    {
-        self.callbacks.push(Arc::new(Mutex::new(callback)));
-        Ok(())
-    }
-
-    pub fn add_function_callback<F>(&mut self, callback: F) -> SVBResult<()>
-    where
-        F: Fn(&FrameData, chrono::DateTime<chrono::Utc>) + Send + Sync + 'static,
-    {
-        self.function_callbacks.push(Arc::new(callback));
         Ok(())
     }
 
@@ -160,13 +218,7 @@ impl SVBonyCamera {
     ///  Error if the camera cannot be closed
     ///
     pub fn close_camera(&mut self) -> SVBResult<()> {
-        match ll::close_camera(&self.id) {
-            Ok(_) => {
-                self.id = -1;
-                Ok(())
-            }
-            Err(e) => Err(e.into()),
-        }
+        ll::close_camera(&self.id)
     }
 
     /// Get the info structure describign the camera
@@ -184,14 +236,6 @@ impl SVBonyCamera {
         ll::get_dropped_frames(&self.id).unwrap_or(0)
     }
 
-    /// Get the camera exposure time in microseconds
-    ///
-    /// # Returns
-    ///     The exposure time in microseconds
-    pub fn exposure(&self) -> SVBResult<i32> {
-        self.get_control_value(SVBControlType::SVBExposure)
-    }
-
     /// Get the camera pixel pitch in microns
     ///
     /// # Returns
@@ -199,40 +243,6 @@ impl SVBonyCamera {
     pub fn pixel_pitch(&self) -> f64 {
         self.pixel_pitch
     }
-
-    /// Set the camera exposure time in microseconds
-    ///
-    /// # Arguments
-    ///     * `value` - The exposure time in microseconds
-    ///
-    /// # Returns
-    ///    Empty result if successful
-    ///   Error if the exposure time is invalid
-    pub fn set_exposure(&self, value: i32) -> SVBResult<()> {
-        self.set_control_value(SVBControlType::SVBExposure, value)
-    }
-
-    /// Get the camera gain
-    ///
-    /// # Returns
-    ///     The gain value
-    ///
-    pub fn gain(&self) -> SVBResult<i32> {
-        self.get_control_value(SVBControlType::SVBGain)
-    }
-
-    /// Set the camera gain
-    /// # Arguments
-    ///    * `value` - The gain value
-    ///
-    /// # Returns
-    ///    Empty result if successful
-    ///    Error if the gain value is invalid
-    ///    
-    pub fn set_gain(&self, value: i32) -> SVBResult<()> {
-        self.set_control_value(SVBControlType::SVBGain, value)
-    }
-
     /// Get the camera properties
     ///
     /// # Returns
@@ -302,12 +312,11 @@ impl SVBonyCamera {
     ///
     /// # Returns
     ///  The control info in SVBControlCaps struct
-    pub fn get_control_info(&self, ctrl: SVBControlType) -> SVBResult<SVBControlCaps> {
+    pub fn get_control_info(&self, ctrl: SVBControlType) -> Option<SVBControlCaps> {
         self.capabilities
             .iter()
             .find(|&x| x.control_type == ctrl)
             .cloned()
-            .ok_or_else(|| "Control not found".into())
     }
 
     /// Set the value of a camera control
@@ -321,10 +330,7 @@ impl SVBonyCamera {
     /// Error if the value is invalid
     ///
     pub fn set_control_value(&self, ctrl: SVBControlType, value: i32) -> SVBResult<()> {
-        match ll::set_control_value(&self.id, ctrl, value, false) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        ll::set_control_value(&self.id, ctrl, value, false)
     }
 
     /// Query the value of a camera control
@@ -338,10 +344,7 @@ impl SVBonyCamera {
     /// # Errors
     /// Error if the control is not found
     pub fn get_control_value(&self, ctrl: SVBControlType) -> SVBResult<i32> {
-        match ll::get_control_value(&self.id, ctrl) {
-            Ok(value) => Ok(value.0),
-            Err(e) => Err(e.into()),
-        }
+        ll::get_control_value(&self.id, ctrl).map(|v| v.0)
     }
 
     /// Start video capture
@@ -352,24 +355,18 @@ impl SVBonyCamera {
     /// Empty result if successful
     /// Error if the video capture fails
     pub fn start_video_capture(&self) -> SVBResult<()> {
-        match ll::start_capture(&self.id) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        ll::start_capture(&self.id)
     }
 
     pub fn get_frame<T>(
         &self,
         data: &mut [T],
         wait_ms: i32,
-    ) -> Result<chrono::DateTime<chrono::Utc>, SVBErrorCode>
+    ) -> Result<chrono::DateTime<chrono::Utc>, SVBError>
     where
         T: ll::PixelType,
     {
-        match ll::get_video_data(&self.id, data, wait_ms) {
-            Ok(ts) => Ok(ts),
-            Err(e) => Err(e),
-        }
+        ll::get_video_data(&self.id, data, wait_ms)
     }
 
     /// Stop video capture
@@ -378,10 +375,7 @@ impl SVBonyCamera {
     /// Empty result if successful
     /// Error if the stopping the video capture fails
     pub fn stop_video_capture(&self) -> SVBResult<()> {
-        match ll::stop_capture(&self.id) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        ll::stop_capture(&self.id)
     }
 }
 
@@ -422,7 +416,6 @@ impl std::fmt::Display for SVBonyCamera {
 
 #[cfg(test)]
 mod test {
-    use std::io::Write;
 
     use super::*;
 
@@ -460,78 +453,31 @@ mod test {
     }
 
     #[test]
-    fn test_write() {
-        let cameras = get_connected_cameras().unwrap();
-        if cameras.is_empty() {
-            return;
-        }
-        let mut cam = SVBonyCamera::new(0).unwrap();
-        cam.set_exposure(10000).unwrap();
-        cam.set_control_value(SVBControlType::SVBFrameSpeedMode, 0)
-            .unwrap();
-        println!("cam = {}", cam);
-
-        #[derive(Debug)]
-        struct RawWriteCallback {
-            fs: std::fs::File,
-        }
-        impl RawWriteCallback {
-            fn new() -> Self {
-                let fs = std::fs::File::create("test.raw").unwrap();
-                RawWriteCallback { fs }
-            }
-        }
-
-        impl CameraCallback for RawWriteCallback {
-            fn on_video_frame(
-                &mut self,
-                data: &FrameData,
-                _timestamp: chrono::DateTime<chrono::Utc>,
-            ) {
-                match data {
-                    FrameData::U8Frame(data) => {
-                        self.fs.write_all(data).unwrap();
-                    }
-                    FrameData::U16Frame(data) => {
-                        self.fs
-                            .write_all(unsafe {
-                                std::slice::from_raw_parts(
-                                    data.as_ptr() as *const u8,
-                                    std::mem::size_of_val(*data),
-                                )
-                            })
-                            .unwrap();
-                    }
-                }
-            }
-        }
-        let cc = RawWriteCallback::new();
-        cam.add_callback(cc).unwrap();
-        let mut camclone = cam.clone();
-        let handle = std::thread::spawn(move || {
-            camclone.run().unwrap();
-        });
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        cam.stop();
-        handle.join().unwrap();
-    }
-
-    #[test]
     fn test_in_thread() {
         let cameras = get_connected_cameras().unwrap();
         if cameras.is_empty() {
+            println!("No cameras found");
             return;
         }
         let mut cam = SVBonyCamera::new(0).unwrap();
-        cam.set_exposure(100000).unwrap();
-        cam.add_function_callback(|_data, ts| {
-            println!("ts = {}", ts);
+        cam.set_exposure(0.2).unwrap();
+
+        cam.set_frame_callback(|frame: &CameraFrame| -> Result<(), CameraError> {
+            println!(
+                "frame: exp={} ts={} size={}x{}",
+                frame.exposure,
+                frame.center_of_integration,
+                frame.frame.width(),
+                frame.frame.height()
+            );
+            Ok(())
         })
         .unwrap();
+
         let mut camclone = cam.clone();
         let handle = std::thread::spawn(move || -> SVBResult<()> { camclone.run() });
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        cam.stop();
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        cam.stop().unwrap();
         handle.join().unwrap().unwrap();
     }
 
@@ -541,12 +487,12 @@ mod test {
         if cameras.is_empty() {
             return;
         }
-        let cam = SVBonyCamera::new(0).unwrap();
+        let mut cam = SVBonyCamera::new(0).unwrap();
 
-        cam.set_gain(30).unwrap();
+        cam.set_gain(30.0).unwrap();
 
         println!("cam = {}", cam);
-        println!("exposure = {}", cam.exposure().unwrap());
-        println!("gain = {}", cam.gain().unwrap());
+        println!("exposure = {}", cam.get_exposure().unwrap());
+        println!("gain = {}", cam.get_gain().unwrap());
     }
 }
