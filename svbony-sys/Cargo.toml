@@ -9,6 +9,6 @@ repository = "https://github.com/ssmichael1/svbony"
 keywords = ["svbony", "camera", "astronomy", "ffi", "usb"]
 categories = ["external-ffi-bindings", "science", "hardware-support"]
 links = "SVBCameraSDK"
-rust-version = "1.64"
+rust-version = "1.68"
 
 [build-dependencies]
