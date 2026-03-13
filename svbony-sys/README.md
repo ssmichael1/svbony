@@ -53,12 +53,7 @@ println!("{n} cameras connected");
 
 ## License
 
-Licensed under either of
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-
-at your option.
+Licensed under the MIT license ([LICENSE](../LICENSE) or <http://opensource.org/licenses/MIT>).
 
 **Note**: This crate does not bundle the SVBony SDK. The SDK itself is
 proprietary; refer to SVBony's terms for its usage conditions.
