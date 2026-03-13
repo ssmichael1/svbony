@@ -16,4 +16,7 @@ image = ["dep:image"]
 [dependencies]
 svbony-sys = { path = "../svbony-sys", version = "0.1.0" }
 thiserror = "2"
-image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+image = { version = "0.25", default-features = false, optional = true }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
