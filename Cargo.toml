@@ -1,0 +1,3 @@
+[workspace]
+members = ["svbony-sys", "svbony"]
+resolver = "2"
