@@ -7,7 +7,7 @@ handling over the C SDK.
 ## SDK Installation
 
 The SVBony Camera SDK is closed-source and **not bundled** with this crate.
-Download it from [SVBony's download page](https://www.svbony.com/software-driver/)
+Download it from [SVBony's download page](https://www.svbony.com/downloads/software-driver)
 and set an environment variable pointing to the SDK root:
 
 ```sh

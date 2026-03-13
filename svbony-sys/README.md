@@ -9,7 +9,7 @@ crate instead.
 ## SDK Installation
 
 The SVBony Camera SDK is closed-source and **not bundled** with this crate. You
-must download it yourself from [SVBony's download page](https://www.svbony.com/software-driver/)
+must download it yourself from [SVBony's download page](https://www.svbony.com/downloads/software-driver)
 and set an environment variable pointing to the SDK root:
 
 ```sh
