@@ -148,9 +148,9 @@ impl Camera {
 
     /// Returns the camera firmware version string.
     pub fn firmware_version(&self) -> Result<String> {
-        let mut buf = [0i8; 64];
+        let mut buf = [0 as c_char; 64];
         check(unsafe {
-            svbony_sys::SVBGetCameraFirmwareVersion(self.id, buf.as_mut_ptr() as *mut c_char)
+            svbony_sys::SVBGetCameraFirmwareVersion(self.id, buf.as_mut_ptr())
         })?;
         Ok(unsafe { CStr::from_ptr(buf.as_ptr()) }
             .to_string_lossy()
@@ -193,13 +193,9 @@ impl Camera {
     /// Returns `(needs_upgrade, minimum_version_string)`.
     pub fn needs_upgrade(&self) -> Result<(bool, String)> {
         let mut need: c_int = 0;
-        let mut ver = [0i8; 64];
+        let mut ver = [0 as c_char; 64];
         check(unsafe {
-            svbony_sys::SVBIsCameraNeedToUpgrade(
-                self.id,
-                &mut need,
-                ver.as_mut_ptr() as *mut c_char,
-            )
+            svbony_sys::SVBIsCameraNeedToUpgrade(self.id, &mut need, ver.as_mut_ptr())
         })?;
         let version = unsafe { CStr::from_ptr(ver.as_ptr()) }
             .to_string_lossy()
